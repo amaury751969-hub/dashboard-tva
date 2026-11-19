@@ -74,8 +74,14 @@ st.title("Qualité du référentiel TVA")
 total = len(selection)
 col1, col2, col3, col4 = st.columns(4)
 col1.metric("Numéros", total)
-# TODO CHIFFRES (étape 1) : dans col2, col3 et col4, le nombre de valides, d'invalides et de non tranchés,
-#          chacun avec son pourcentage du total.
+for colonne, libelle, statut in (
+    (col2, "Valides", "valide"),
+    (col3, "Invalides", "invalide"),
+    (col4, "Non tranchés", "non_tranche"),
+):
+    nombre = int((selection["statut"] == statut).sum())
+    pourcentage = f"{nombre / total:.1%} du total" if total else None
+    colonne.metric(libelle, nombre, pourcentage, delta_color="off")
 
 # =============================================================================
 # ÉTAPE 2 — L'entonnoir
