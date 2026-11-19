@@ -71,7 +71,7 @@ if pays:
     selection = selection[selection["pays_declare"].isin(pays)]
 if canal:
     selection = selection[selection["source_saisie"].isin(canal)]
-
+selection = selection[selection["date_saisie"].dt.date.between(debut, fin)]
 
 # TODO APPLIQUER_FILTRES (étape 3c) : appliquer le filtre canal et le filtre période à `selection`.
 #           Toujours `selection = selection[...]`, jamais `selection = df[...]`.
