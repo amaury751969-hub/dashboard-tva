@@ -65,9 +65,14 @@ debut, fin = st.sidebar.slider(
 
 # `selection` contient les lignes qui passent les filtres. Toute la suite utilise
 # `selection`, jamais `df` : c'est ce qui fait réagir la page aux filtres.
+
 selection = df
 if pays:
     selection = selection[selection["pays_declare"].isin(pays)]
+if canal:
+    selection = selection[selection["source_saisie"].isin(canal)]
+
+
 # TODO APPLIQUER_FILTRES (étape 3c) : appliquer le filtre canal et le filtre période à `selection`.
 #           Toujours `selection = selection[...]`, jamais `selection = df[...]`.
 
