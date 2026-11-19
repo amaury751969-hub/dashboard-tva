@@ -50,8 +50,18 @@ st.sidebar.header("Filtres")
 pays = st.sidebar.multiselect("Pays déclaré", sorted(df["pays_declare"].unique()))
 
 # TODO FILTRE_CANAL (étape 3a) : sur le même modèle, un filtre « Canal de saisie » sur la colonne source_saisie.
+canal = st.sidebar.multiselect("Canal de saisie", sorted(df["source_saisie"].unique()))
+
 
 # TODO FILTRE_PERIODE (étape 3b) : un filtre « Période de saisie » avec st.sidebar.slider (voir le brief).
+
+debut, fin = st.sidebar.slider(
+    "Période de saisie",
+    min_value=df["date_saisie"].min().date(),
+    max_value=df["date_saisie"].max().date(),
+    value=(df["date_saisie"].min().date(), df["date_saisie"].max().date()),
+    format="DD/MM/YYYY",
+)
 
 # `selection` contient les lignes qui passent les filtres. Toute la suite utilise
 # `selection`, jamais `df` : c'est ce qui fait réagir la page aux filtres.
@@ -81,10 +91,11 @@ col3.metric("Invalides", invalides, f"{invalides / total:.1%} du total", delta_c
 non_tranches = (selection["statut"] == "non_tranche").sum()
 col4.metric("Non_tranches", non_tranches, f"{non_tranches / total:.1%} du total", delta_color="off")
 
-
-
 # TODO CHIFFRES (étape 1) : dans col2, col3 et col4, le nombre de valides, d'invalides et de non tranchés,
 #          chacun avec son pourcentage du total.
+
+
+
 
 # =============================================================================
 # ÉTAPE 2 — L'entonnoir
@@ -92,6 +103,21 @@ col4.metric("Non_tranches", non_tranches, f"{non_tranches / total:.1%} du total"
 st.subheader("Combien de numéros ont pu être envoyés à VIES ?")
 # TODO ENTONNOIR (étape 2) : compter, étape par étape, les numéros qui restent après le retrait des absents,
 #          des doublons, puis des numéros mal formés, et les afficher avec px.funnel.
+
+absents = (selection["etape_rejet"] == "absent").sum()
+doublons = (selection["etape_rejet"] == "doublon").sum()      # même chose avec "doublon"
+structure = (selection["etape_rejet"] == "structure").sum()    # même chose avec "structure"
+entonnoir = pd.DataFrame({
+    "étape": ["Référentiel", "Sans les absents", "Sans les doublons", "Envoyés à VIES"],
+    "numéros": [total,
+                total - absents,
+                total - absents - doublons,
+                total - absents - doublons - structure],
+})
+fig = px.funnel(entonnoir, x="numéros", y="étape",
+                title="Du référentiel aux numéros envoyés à VIES")
+st.plotly_chart(fig)
+
 
 # =============================================================================
 # ÉTAPE 4 — D'où viennent les erreurs ?
