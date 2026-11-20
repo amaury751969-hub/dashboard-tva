@@ -154,6 +154,12 @@ fig = px.bar(taux, x="taux d'erreur (%)", y="pays_declare", orientation="h",
              text="taux d'erreur (%)", title="Part de numéros invalides par pays déclaré")
 st.plotly_chart(fig)
 
+st.caption(
+    "Sans filtre, le canal « reprise_erp », qui regroupe les données récupérées de "
+    "l’ancien logiciel de gestion, affiche environ 59 % de numéros invalides, "
+    "contre environ 43 % pour les autres canaux. L’ancienneté de ces données "
+    "pourrait expliquer une partie de l’écart."
+)
 
 
 # =============================================================================
