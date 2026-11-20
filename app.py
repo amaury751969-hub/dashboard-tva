@@ -114,85 +114,143 @@ col4.metric("Non_tranches", non_tranches, f"{non_tranches / total:.1%} du total"
 
 
 
-# =============================================================================
-# ÉTAPE 2 — L'entonnoir
-# =============================================================================
-st.subheader("Combien de numéros ont pu être envoyés à VIES ?")
-# TODO ENTONNOIR (étape 2) : compter, étape par étape, les numéros qui restent après le retrait des absents,
-#          des doublons, puis des numéros mal formés, et les afficher avec px.funnel.
+onglet_vies, onglet_erreurs, onglet_actions = st.tabs([
+    "Suivi VIES",
+    "Analyse des erreurs",
+    "Numéros à traiter",
+])
 
-absents = (selection["etape_rejet"] == "absent").sum()
-doublons = (selection["etape_rejet"] == "doublon").sum()      # même chose avec "doublon"
-structure = (selection["etape_rejet"] == "structure").sum()    # même chose avec "structure"
-entonnoir = pd.DataFrame({
-    "étape": ["Référentiel", "Sans les absents", "Sans les doublons", "Envoyés à VIES"],
-    "numéros": [total,
-                total - absents,
-                total - absents - doublons,
-                total - absents - doublons - structure],
-})
-fig = px.funnel(entonnoir, x="numéros", y="étape",
-                title="Du référentiel aux numéros envoyés à VIES")
-st.plotly_chart(fig)
+with onglet_vies:
+    # =============================================================================
+    # ÉTAPE 2 — L'entonnoir
+    # =============================================================================
+    st.subheader("Combien de numéros ont pu être envoyés à VIES ?")
+    # TODO ENTONNOIR (étape 2) : compter, étape par étape, les numéros qui restent après le retrait des absents,
+    #          des doublons, puis des numéros mal formés, et les afficher avec px.funnel.
+
+    absents = (selection["etape_rejet"] == "absent").sum()
+    doublons = (selection["etape_rejet"] == "doublon").sum()      # même chose avec "doublon"
+    structure = (selection["etape_rejet"] == "structure").sum()    # même chose avec "structure"
+    entonnoir = pd.DataFrame({
+        "étape": ["Référentiel", "Sans les absents", "Sans les doublons", "Envoyés à VIES"],
+        "numéros": [total,
+                    total - absents,
+                    total - absents - doublons,
+                    total - absents - doublons - structure],
+    })
+    fig = px.funnel(entonnoir, x="numéros", y="étape",
+                    title="Du référentiel aux numéros envoyés à VIES")
+    st.plotly_chart(fig)
+
+    #Histogramme des temps de réponses VIES
+
+    st.subheader("Temps de réponse VIES")
+
+    temps = selection["temps_reponse_ms"].dropna()
+
+    if temps.empty:
+        st.info("Aucun temps de réponse VIES pour cette sélection.")
+    else:
+        mediane = temps.median()
+        st.metric("Temps de réponse médian", f"{mediane:g} ms")
+
+        fig = px.histogram(
+            temps.to_frame(),
+            x="temps_reponse_ms",
+            title="Répartition des temps de réponse VIES",
+            labels={"temps_reponse_ms": "Temps de réponse (ms)"},
+        )
+        fig.update_yaxes(title_text="Nombre de réponses")
+        fig.add_vline(
+            x=mediane,
+            line_dash="dash",
+            annotation_text=f"Médiane : {mediane:g} ms",
+        )
+        st.plotly_chart(fig)
+
+with onglet_erreurs:
+    # =============================================================================
+    # ÉTAPE 4 — D'où viennent les erreurs ?
+    # =============================================================================
+    st.subheader("D'où viennent les erreurs ?")
+    # TODO GRAPHIQUES (étape 4) : avec taux_invalides(selection, "source_saisie"), puis "pays_declare",
+    #          deux graphiques en barres horizontales avec la valeur écrite sur chaque barre,
+    #          puis une phrase (st.caption) qui explique quel canal sort du lot.
+
+    taux = taux_invalides(selection, "source_saisie")
+    fig = px.bar(taux, x="taux d'erreur (%)", y="source_saisie", orientation="h",
+                 text="taux d'erreur (%)", title="Part de numéros invalides par canal de saisie")
+    st.plotly_chart(fig)
+
+    taux = taux_invalides(selection, "pays_declare")
+    fig = px.bar(taux, x="taux d'erreur (%)", y="pays_declare", orientation="h",
+                 text="taux d'erreur (%)", title="Part de numéros invalides par pays déclaré")
+    st.plotly_chart(fig)
+
+    st.caption(
+        "Sans filtre, le canal « reprise_erp », qui regroupe les données récupérées de "
+        "l’ancien logiciel de gestion, affiche environ 59 % de numéros invalides, "
+        "contre environ 43 % pour les autres canaux. L’ancienneté de ces données "
+        "pourrait expliquer une partie de l’écart."
+    )
+
+    # Graphique du nombre de numéros non tranchés par pays
+    st.subheader("Numéros non tranchés par pays")
+
+    non_tranches_par_pays = (
+        selection[selection["statut"] == "non_tranche"]
+        .groupby("pays_declare")
+        .size()
+        .reset_index(name="nombre")
+        .sort_values("nombre")
+    )
+
+    if non_tranches_par_pays.empty:
+        st.info("Aucun numéro non tranché pour cette sélection.")
+    else:
+        fig = px.bar(
+            non_tranches_par_pays,
+            x="nombre",
+            y="pays_declare",
+            orientation="h",
+            text="nombre",
+            title="Nombre de numéros non tranchés par pays déclaré",
+            labels={"nombre": "Nombre de numéros", "pays_declare": "Pays déclaré"},
+        )
+        st.plotly_chart(fig)
+
+with onglet_actions:
+    # =============================================================================
+    # ÉTAPE 5 — Les numéros à traiter
+    # =============================================================================
+    st.subheader("Numéros à traiter")
+    # TODO A_TRAITER (étape 5) : la liste des invalides et des non tranchés, avec une colonne « action »,
+    #          et un bouton pour la télécharger.
+
+    # 1. Garder les lignes dont le statut n'est pas "valide" (!= veut dire « différent de »)
+    a_traiter = selection[selection["statut"] != "valide"].copy()
 
 
-# =============================================================================
-# ÉTAPE 4 — D'où viennent les erreurs ?
-# =============================================================================
-st.subheader("D'où viennent les erreurs ?")
-# TODO GRAPHIQUES (étape 4) : avec taux_invalides(selection, "source_saisie"), puis "pays_declare",
-#          deux graphiques en barres horizontales avec la valeur écrite sur chaque barre,
-#          puis une phrase (st.caption) qui explique quel canal sort du lot.
-
-taux = taux_invalides(selection, "source_saisie")
-fig = px.bar(taux, x="taux d'erreur (%)", y="source_saisie", orientation="h",
-             text="taux d'erreur (%)", title="Part de numéros invalides par canal de saisie")
-st.plotly_chart(fig)
-
-taux = taux_invalides(selection, "pays_declare")
-fig = px.bar(taux, x="taux d'erreur (%)", y="pays_declare", orientation="h",
-             text="taux d'erreur (%)", title="Part de numéros invalides par pays déclaré")
-st.plotly_chart(fig)
-
-st.caption(
-    "Sans filtre, le canal « reprise_erp », qui regroupe les données récupérées de "
-    "l’ancien logiciel de gestion, affiche environ 59 % de numéros invalides, "
-    "contre environ 43 % pour les autres canaux. L’ancienneté de ces données "
-    "pourrait expliquer une partie de l’écart."
-)
+    # 2. Ajouter une colonne "action" : .map remplace chaque statut par le texte associé
+    a_traiter["action"] = a_traiter["statut"].map({
+        "invalide": "Demander un nouveau numéro au client",
+        "non_tranche": "Revérifier sur VIES avant la prochaine facture",
+    })
 
 
-# =============================================================================
-# ÉTAPE 5 — Les numéros à traiter
-# =============================================================================
-st.subheader("Numéros à traiter")
-# TODO A_TRAITER (étape 5) : la liste des invalides et des non tranchés, avec une colonne « action »,
-#          et un bouton pour la télécharger.
-
-# 1. Garder les lignes dont le statut n'est pas "valide" (!= veut dire « différent de »)
-a_traiter = selection[selection["statut"] != "valide"].copy()
+    # 3. Afficher le nombre et le tableau, avec les colonnes utiles pour la comptabilité
+    colonnes = ["raison_sociale", "numero_saisi", "pays_declare", "statut", "motif", "action"]
+    st.write(f"{len(a_traiter)} numéros demandent une action.")
+    st.dataframe(a_traiter[colonnes], hide_index=True)
 
 
-# 2. Ajouter une colonne "action" : .map remplace chaque statut par le texte associé
-a_traiter["action"] = a_traiter["statut"].map({
-    "invalide": "Demander un nouveau numéro au client",
-    "non_tranche": "Revérifier sur VIES avant la prochaine facture",
-})
+    # 4. Le bouton de téléchargement
+    st.download_button(
+        "Télécharger la liste",
+        a_traiter[colonnes].to_csv(index=False, sep=";").encode("utf-8-sig"),
+        file_name="numeros_a_traiter.csv",
+    )
 
-
-# 3. Afficher le nombre et le tableau, avec les colonnes utiles pour la comptabilité
-colonnes = ["raison_sociale", "numero_saisi", "pays_declare", "statut", "motif", "action"]
-st.write(f"{len(a_traiter)} numéros demandent une action.")
-st.dataframe(a_traiter[colonnes], hide_index=True)
-
-
-# 4. Le bouton de téléchargement
-st.download_button(
-    "Télécharger la liste",
-    a_traiter[colonnes].to_csv(index=False, sep=";").encode("utf-8-sig"),
-    file_name="numeros_a_traiter.csv",
-)
-
-# Déjà écrit : les données brutes, cachées par défaut.
-with st.expander("Voir toutes les données"):
-    st.dataframe(selection, hide_index=True)
+    # Déjà écrit : les données brutes, cachées par défaut.
+    with st.expander("Voir toutes les données"):
+        st.dataframe(selection, hide_index=True)
